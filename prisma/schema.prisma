@@ -1,0 +1,194 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider  = "postgresql"
+    url       = env("POSTGRES_PRISMA_URL") // uses connection pooling
+    directUrl = env("POSTGRES_URL_NON_POOLING") // uses a direct connection
+}
+
+model User {
+    id                String           @id @default(uuid())
+    userName          String           @db.VarChar(255)
+    firstName         String?          @db.VarChar(25)
+    lastName          String?          @db.VarChar(50)
+    dateJoined        DateTime         @default(now())
+    lastEdited        DateTime         @default(now())
+    email             String           @unique @db.VarChar(100)
+    password          String           @db.VarChar(255)
+    profile           Profile?
+    followedBy        Follow[]         @relation("followedBy")
+    following         Follow[]         @relation("following")
+    createdRecipeBook RecipeBook[]     @relation("createdRecipeBooks")
+    editedRecipeBook  RecipeBook[]     @relation("editedRecipeBooks")
+    RecipeBookUser    RecipeBookUser[]
+    createdRecipe     Recipe[]         @relation("createdRecipe")
+    editedRecipe      Recipe[]         @relation("editedRecipe")
+    createdBuild      Build[]          @relation("createdBuild")
+    editedBuild       Build[]          @relation("editedBuild")
+    ArchivedBuild     ArchivedBuild[]
+}
+
+model Follow {
+    followedBy   User   @relation("followedBy", fields: [followedById], references: [id])
+    followedById String
+    following    User   @relation("following", fields: [followingId], references: [id])
+    followingId  String
+    relationship String
+
+    @@id([followingId, followedById])
+}
+
+model Profile {
+    id     String @id @default(uuid())
+    user   User   @relation(fields: [userId], references: [id])
+    userId String @unique
+    photo  String
+}
+
+model Ingredient {
+    id               String               @id @default(uuid())
+    name             String               @unique
+    description      String
+    parents          IngredientRelation[] @relation("IngredientParent")
+    children         IngredientRelation[] @relation("IngredientChild")
+    CustomIngredient CustomIngredient[]
+    Touch            Touch[]
+    ArchivedTouch    ArchivedTouch[]
+}
+
+// Intermediate join table for the many-to-many relationship
+model IngredientRelation {
+    parent   Ingredient @relation("IngredientParent", fields: [parentId], references: [id])
+    parentId String
+
+    child   Ingredient @relation("IngredientChild", fields: [childId], references: [id])
+    childId String
+
+    @@id([parentId, childId])
+}
+
+model CustomIngredient {
+    id            String          @id @default(uuid())
+    name          String
+    description   String
+    ingredient    Ingredient      @relation(fields: [ingredientId], references: [id])
+    ingredientId  String
+    Touch         Touch[]
+    ArchivedTouch ArchivedTouch[]
+}
+
+model RecipeBook {
+    id              String            @id @default(uuid())
+    name            String            @db.VarChar(255)
+    description     String?
+    createdAt       DateTime          @default(now())
+    editedAt        DateTime          @default(now()) @updatedAt()
+    createdById     String
+    editedById      String
+    createdBy       User              @relation("createdRecipeBooks", fields: [createdById], references: [id], onDelete: Cascade, onUpdate: Cascade)
+    editedBy        User              @relation("editedRecipeBooks", fields: [editedById], references: [id], onDelete: Cascade, onUpdate: Cascade)
+    RecipeBookUser  RecipeBookUser[]
+    RecipeBookBuild RecipeBookBuild[]
+}
+
+model RecipeBookBuild {
+    buildId      String
+    recipeBookId String
+    recipeBook   RecipeBook @relation(fields: [recipeBookId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+    build        Build      @relation(fields: [buildId], references: [id], onDelete: NoAction, onUpdate: Cascade)
+
+    @@id([buildId, recipeBookId])
+}
+
+model RecipeBookUser {
+    userId       String
+    recipeBookId String
+    recipeBook   RecipeBook @relation(fields: [recipeBookId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+    user         User       @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+    permission   String
+
+    @@id([userId, recipeBookId])
+}
+
+model Recipe {
+    id            String          @id @default(uuid())
+    createdAt     DateTime        @default(now())
+    editedAt      DateTime        @default(now())
+    name          String          @unique @db.VarChar(255)
+    about         String?
+    createdBy     User?           @relation("createdRecipe", fields: [createdById], references: [id])
+    createdById   String?
+    editedBy      User?           @relation("editedRecipe", fields: [editedById], references: [id])
+    editedById    String?
+    Build         Build[]
+    ArchivedBuild ArchivedBuild[]
+}
+
+model Build {
+    id              String            @id @default(uuid())
+    buildName       String            @default("")
+    createdAt       DateTime          @default(now())
+    editedAt        DateTime          @default(now())
+    createdById     String?
+    editedById      String?
+    recipeId        String
+    instructions    String?
+    notes           String?
+    glassware       String?           @db.VarChar()
+    ice             String?           @db.VarChar(100)
+    version         Int               @default(0)
+    createdBy       User?             @relation("createdBuild", fields: [createdById], references: [id])
+    editedBy        User?             @relation("editedBuild", fields: [editedById], references: [id])
+    recipe          Recipe            @relation(fields: [recipeId], references: [id])
+    Touch           Touch[]
+    ArchivedBuild   ArchivedBuild[]
+    RecipeBookBuild RecipeBookBuild[]
+}
+
+model ArchivedBuild {
+    id            String          @id @default(uuid())
+    buildName     String          @default("")
+    createdAt     DateTime        @default(now())
+    createdById   String?
+    createdBy     User?           @relation(fields: [createdById], references: [id])
+    build         Build           @relation(fields: [buildId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+    buildId       String
+    recipe        Recipe?         @relation(fields: [recipeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+    recipeId      String?
+    instructions  String?
+    notes         String?
+    glassware     String?         @db.VarChar()
+    ice           String?         @db.VarChar(100)
+    version       Int
+    archivedTouch ArchivedTouch[]
+}
+
+model Touch {
+    id                 String            @id @default(uuid())
+    build              Build             @relation(fields: [buildId], references: [id], onDelete: Cascade)
+    buildId            String
+    order              Int?
+    amount             Float?            @db.Real
+    unit               String?           @db.VarChar(50)
+    ingredientId       String
+    ingredient         Ingredient        @relation(fields: [ingredientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+    customIngredientId String?
+    customIngredient   CustomIngredient? @relation(fields: [customIngredientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+    version            Int?              @default(0)
+}
+
+model ArchivedTouch {
+    id                 String            @id @default(uuid())
+    archivedBuild      ArchivedBuild     @relation(fields: [archivedBuildId], references: [id], onDelete: Cascade)
+    archivedBuildId    String
+    order              Int?
+    amount             Float?            @db.Real
+    unit               String?           @db.VarChar(50)
+    customIngredientId String?
+    customIngredient   CustomIngredient? @relation(fields: [customIngredientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+    ingredientId       String
+    ingredient         Ingredient        @relation(fields: [ingredientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+    version            Int?
+}
